@@ -102,12 +102,18 @@ export const onLoad = () => {
       if (data?.rowType !== 1 || !row.message) return;
       const id = data.message?.id;
       const h = history.get(id);
-      if (h?.old.length) {
+      if (h?.old.length && !row.message.__mlEdits) {
+        row.message.__mlEdits = true;
         // Render previous versions above the current text without touching the real message content.
+        // Grey text via the link/linkColor trick, since plain text nodes have no color field.
+        const grey = ReactNative.processColor("#949BA4");
         const past = h.old.flatMap((o) => [
-          { type: "s", content: [{ type: "text", content: oneLine(o) || "(empty)" }] },
-          { type: "text", content: " " },
-          { type: "inlineCode", content: "(edited)" },
+          {
+            type: "link",
+            target: "usernameOnClick",
+            context: { username: 1, usernameOnClick: { action: "0", userId: "0", linkColor: grey, messageChannelId: "0" }, medium: true },
+            content: [{ type: "text", content: o || "(empty)" }],
+          },
           { type: "text", content: "\n" },
         ]);
         row.message.content = [...past, ...(Array.isArray(row.message.content) ? row.message.content : [])];
