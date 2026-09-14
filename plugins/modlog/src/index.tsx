@@ -54,7 +54,7 @@ function handleDelete(channelId: string, id: string) {
   if (!msg || deleted.has(id) || ignored(msg, channelId)) return null;
   deleted.add(id);
   entry("delete", msg, channelId, history.get(id)?.real ?? msg.content ?? "");
-  return { type: "MESSAGE_UPDATE", message: { id, channel_id: channelId, content: msg.content } };
+  return { type: "MESSAGE_UPDATE", message: { id, channel_id: channelId, edited_timestamp: new Date().toISOString() } };
 }
 
 let patches: (() => void)[] = [];
@@ -73,7 +73,7 @@ export const onLoad = () => {
           if (kept.length) {
             kept.forEach((id: string) => {
               const msg = MessageStore.getMessage(event.channelId, id);
-              FluxDispatcher.dispatch({ type: "MESSAGE_UPDATE", message: { id, channel_id: event.channelId, content: msg.content }, [BYPASS]: true });
+              FluxDispatcher.dispatch({ type: "MESSAGE_UPDATE", message: { id, channel_id: event.channelId, edited_timestamp: new Date().toISOString() }, [BYPASS]: true });
             });
             args[0] = { ...event, ids: event.ids.filter((id: string) => !kept.includes(id)) };
           }
@@ -89,11 +89,6 @@ export const onLoad = () => {
             h.real = next;
             history.set(id, h);
           }
-          if (h.old.length) {
-            // Show previous versions above the current text, like Vencord's "(edited)" history.
-            const past = h.old.map((o) => `-# ~~${oneLine(o) || "(empty)"}~~ (edited)`).join("\n");
-            args[0] = { ...event, message: { ...event.message, content: `${past}\n${next}` } };
-          }
         }
       } catch (e) {
         console.error("[MessageLogger]", e);
@@ -104,7 +99,20 @@ export const onLoad = () => {
   // Highlight deleted messages red in chat.
   patches.push(
     after("generate", RowManager.prototype, ([data], row) => {
-      if (data?.rowType !== 1 || !deleted.has(data.message?.id)) return;
+      if (data?.rowType !== 1 || !row.message) return;
+      const id = data.message?.id;
+      const h = history.get(id);
+      if (h?.old.length) {
+        // Render previous versions above the current text without touching the real message content.
+        const past = h.old.flatMap((o) => [
+          { type: "s", content: [{ type: "text", content: oneLine(o) || "(empty)" }] },
+          { type: "text", content: " " },
+          { type: "inlineCode", content: "(edited)" },
+          { type: "text", content: "\n" },
+        ]);
+        row.message.content = [...past, ...(Array.isArray(row.message.content) ? row.message.content : [])];
+      }
+      if (!deleted.has(id)) return;
       row.backgroundHighlight ??= {};
       row.backgroundHighlight.backgroundColor = ReactNative.processColor("#da373c22");
       row.backgroundHighlight.gutterColor = ReactNative.processColor("#da373cff");
