@@ -105,10 +105,11 @@ export const onLoad = () => {
         row.message.__mlEdits = true;
         // Render previous versions above the current text without touching the real message content.
         // Same node Discord builds for "-# text", so it renders as native grey subtext.
-        const past = h.old.flatMap((o) => [
-          { type: "subtext", content: [{ type: "text", content: o || "(empty)" }] },
-          { type: "text", content: "\n" },
-        ]);
+        // Subtext is a block node, so it already breaks the line; no extra "\n" needed.
+        const past = h.old.map((o) => ({
+          type: "subtext",
+          content: [{ type: "text", content: `${o || "(empty)"} (edited)` }],
+        }));
         row.message.content = [...past, ...(Array.isArray(row.message.content) ? row.message.content : [])];
       }
       if (!deleted.has(id)) return;
